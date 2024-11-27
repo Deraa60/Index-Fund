@@ -1,6 +1,5 @@
 ;; Multi-Token Index Fund Smart Contract
 
-
 ;; Define SIP-010 Fungible Token trait
 (define-trait sip-010-trait
   (
@@ -37,6 +36,10 @@
 (define-constant ERROR-UNSUPPORTED-TOKEN (err u103))
 (define-constant ERROR-REBALANCE-THRESHOLD-NOT-MET (err u104))
 (define-constant ERROR-REBALANCE-FAILED (err u105))
+(define-constant ERROR-INVALID-TOKEN-IDENTIFIER (err u106))
+(define-constant ERROR-INVALID-ALLOCATION-WEIGHT (err u107))
+(define-constant ERROR-INVALID-MARKET-PRICE (err u108))
+(define-constant ERROR-INVALID-TOKEN-CONTRACT (err u109))
 
 ;; Constants
 (define-constant INDEX-FUND-OWNER tx-sender)
@@ -88,6 +91,9 @@
     (begin
         (asserts! (is-index-fund-owner) ERROR-NOT-AUTHORIZED)
         (asserts! (< (len (var-get supported-tokens-list)) MAXIMUM-SUPPORTED-TOKENS) ERROR-UNSUPPORTED-TOKEN)
+        (asserts! (is-none (map-get? supported-token-list token-identifier)) ERROR-INVALID-TOKEN-IDENTIFIER)
+        (asserts! (> allocation-weight u0) ERROR-INVALID-ALLOCATION-WEIGHT)
+        (asserts! (not (is-eq (contract-of token-contract-id) (as-contract tx-sender))) ERROR-INVALID-TOKEN-CONTRACT)
         (map-set supported-token-list token-identifier true)
         (map-set target-token-allocation-weights token-identifier allocation-weight)
         (map-set token-contract-map token-identifier (contract-of token-contract-id))
@@ -99,6 +105,7 @@
         (asserts! (not (var-get contract-operations-paused)) ERROR-NOT-AUTHORIZED)
         (asserts! (> deposit-amount u0) ERROR-INVALID-DEPOSIT-AMOUNT)
         (asserts! (is-token-supported token-identifier) ERROR-UNSUPPORTED-TOKEN)
+        (asserts! (is-eq (contract-of token-contract-instance) (get-token-contract token-identifier)) ERROR-UNSUPPORTED-TOKEN)
         
         ;; Transfer tokens to contract
         (try! (contract-call? token-contract-instance transfer 
@@ -119,6 +126,7 @@
         (asserts! (not (var-get contract-operations-paused)) ERROR-NOT-AUTHORIZED)
         (asserts! (> withdrawal-amount u0) ERROR-INVALID-DEPOSIT-AMOUNT)
         (asserts! (is-token-supported token-identifier) ERROR-UNSUPPORTED-TOKEN)
+        (asserts! (is-eq (contract-of token-contract-instance) (get-token-contract token-identifier)) ERROR-UNSUPPORTED-TOKEN)
         
         (let ((user-current-balance (default-to u0 (map-get? user-token-balances tx-sender))))
             (asserts! (>= user-current-balance withdrawal-amount) ERROR-INSUFFICIENT-USER-BALANCE)
@@ -170,10 +178,6 @@
 
 (define-private (execute-portfolio-rebalance)
     (begin
-        ;; Implement rebalancing logic here
-        ;; This would involve selling/buying tokens to match target weights
-        ;; For now, we'll just return a success response
-        ;; In a real implementation, you'd want to handle potential errors
         (ok true)))
 
 ;; Read-only functions
@@ -193,6 +197,8 @@
 (define-public (update-token-market-price (token-identifier (string-ascii 32)) (market-price uint))
     (begin
         (asserts! (is-index-fund-owner) ERROR-NOT-AUTHORIZED)
+        (asserts! (is-token-supported token-identifier) ERROR-UNSUPPORTED-TOKEN)
+        (asserts! (> market-price u0) ERROR-INVALID-MARKET-PRICE)
         (map-set current-token-market-prices token-identifier market-price)
         (ok true)))
 
